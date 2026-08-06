@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import axios from 'axios'
-import { Folder, Search, Loader2, Image as ImageIcon, X, ChevronDown } from 'lucide-react'
+import { Folder, Search, Loader2, Image as ImageIcon, X } from 'lucide-react'
 import { useInView } from 'react-intersection-observer'
 import ImageCard from './components/ImageCard'
 import ImageModal from './components/ImageModal'
@@ -8,29 +8,44 @@ import ImageModal from './components/ImageModal'
 function App() {
   const [images, setImages] = useState([])
   const [totalImages, setTotalImages] = useState(0)
-  const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const [filter, setFilter] = useState('')
   const [folderSearch, setFolderSearch] = useState('')
-  const [dir, setDir] = useState('./images')
-  const [recentDirs, setRecentDirs] = useState([])
+  
+  const [recentDirs, setRecentDirs] = useState(() => {
+    const saved = localStorage.getItem('recentDirs')
+    return saved ? JSON.parse(saved) : []
+  })
+
+  const [dirInput, setDirInput] = useState(() => {
+    const saved = localStorage.getItem('recentDirs')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (parsed.length > 0) return parsed[0]
+    }
+    return './images'
+  })
+
+  const [dir, setDir] = useState(dirInput)
+
   const [selectedFolders, setSelectedFolders] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [selectedImage, setSelectedImage] = useState(null)
-  const [columnCount, setColumnCount] = useState(6)
+  
+  const [columnCount, setColumnCount] = useState(() => {
+    const savedCols = localStorage.getItem('columnCount')
+    return savedCols ? parseInt(savedCols) : 6
+  })
+
   const abortControllerRef = useRef(null)
+  const pageRef = useRef(1)
 
   useEffect(() => {
-    const saved = localStorage.getItem('recentDirs')
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      setRecentDirs(parsed)
-      if (parsed.length > 0) setDir(parsed[0])
-    }
-    const savedCols = localStorage.getItem('columnCount')
-    if (savedCols) setColumnCount(parseInt(savedCols))
+    localStorage.setItem('recentDirs', JSON.stringify(recentDirs))
+  }, [recentDirs])
 
+  useEffect(() => {
     return () => {
       if (abortControllerRef.current) abortControllerRef.current.abort()
     }
@@ -43,14 +58,13 @@ function App() {
     return parts.slice(0, -1).join('/') || '/';
   }
 
-  const saveToRecent = (newDir) => {
-    const updated = [newDir, ...recentDirs.filter(d => d !== newDir)].slice(0, 5)
-    setRecentDirs(updated)
-    localStorage.setItem('recentDirs', JSON.stringify(updated))
-  }
+  const saveToRecent = useCallback((newDir) => {
+    setRecentDirs(prev => [newDir, ...prev.filter(d => d !== newDir)].slice(0, 5))
+  }, [])
 
-  const fetchImages = async (isNewDir = false) => {
-    if (!dir) return
+  const fetchImages = useCallback(async (isNewDir = false, overrideDir = null) => {
+    const activeDir = overrideDir || dir
+    if (!activeDir) return
     
     // Abort previous request if still running
     if (abortControllerRef.current) {
@@ -58,20 +72,19 @@ function App() {
     }
     abortControllerRef.current = new AbortController()
 
-    const targetPage = isNewDir ? 1 : page
+    const targetPage = isNewDir ? 1 : pageRef.current
     const limit = isNewDir ? 100 : 50
     setLoading(true)
     setError(null)
 
     try {
       const res = await axios.get(`http://localhost:3001/api/images`, {
-        params: { dir, page: targetPage, limit },
+        params: { dir: activeDir, page: targetPage, limit },
         signal: abortControllerRef.current.signal
       })
       
       const resImages = res.data.images || []
-      const newImages = isNewDir ? resImages : [...images, ...resImages]
-      setImages(newImages)
+      setImages(prev => isNewDir ? resImages : [...prev, ...resImages])
       setHasMore(res.data.hasMore || false)
       setTotalImages(res.data.total || 0)
       
@@ -83,10 +96,10 @@ function App() {
           })
         }
         setSelectedFolders(folders)
-        saveToRecent(dir)
-        setPage(2)
+        saveToRecent(activeDir)
+        pageRef.current = 2
       } else {
-        setPage(prev => prev + 1)
+        pageRef.current = pageRef.current + 1
       }
     } catch (err) {
       if (axios.isCancel(err)) return
@@ -95,7 +108,7 @@ function App() {
       const message = err.response?.data?.error
       
       if (status === 404) {
-        setError(`Directory "${dir}" not found.`)
+        setError(`Directory "${activeDir}" not found.`)
       } else if (status === 400) {
         setError(message || 'Invalid directory path.')
       } else {
@@ -109,16 +122,24 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [dir, saveToRecent])
 
   useEffect(() => {
-    if (inView && hasMore && !loading) {
-      fetchImages()
+    if (inView && hasMore && !loading && images.length > 0) {
+      const timer = setTimeout(() => {
+        fetchImages()
+      }, 0)
+      return () => clearTimeout(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inView])
 
   useEffect(() => {
-    fetchImages(true)
+    const timer = setTimeout(() => {
+      fetchImages(true)
+    }, 0)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const uniqueFolders = useMemo(() => Object.keys(selectedFolders || {}).sort(), [selectedFolders])
@@ -166,9 +187,14 @@ function App() {
                 <input 
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 pl-10 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm outline-none"
                   placeholder="Source directory..."
-                  value={dir}
-                  onChange={e => setDir(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && fetchImages()}
+                  value={dirInput}
+                  onChange={e => setDirInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      setDir(dirInput)
+                      fetchImages(true, dirInput)
+                    }
+                  }}
                 />
                 <Folder className="absolute left-3.5 top-3 h-4 w-4 text-gray-400" />
               </div>
@@ -176,8 +202,13 @@ function App() {
               {recentDirs.length > 0 && (
                 <select 
                   className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs focus:ring-2 focus:ring-blue-500/20 transition-all outline-none"
-                  onChange={(e) => setDir(e.target.value)}
-                  value={dir}
+                  onChange={(e) => {
+                    const newDir = e.target.value
+                    setDirInput(newDir)
+                    setDir(newDir)
+                    fetchImages(true, newDir)
+                  }}
+                  value={dirInput}
                 >
                   <option value="" disabled>Recent</option>
                   {recentDirs.map(d => (
@@ -188,7 +219,10 @@ function App() {
               
               <button 
                 className="bg-gray-900 hover:bg-black text-white px-6 py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-gray-200 active:scale-95 disabled:opacity-50 flex items-center gap-2"
-                onClick={() => fetchImages(true)}
+                onClick={() => {
+                  setDir(dirInput)
+                  fetchImages(true, dirInput)
+                }}
                 disabled={loading}
               >
                 {loading ? <Loader2 className="animate-spin" size={18} /> : null}
@@ -344,6 +378,7 @@ function App() {
       </main>
 
       <ImageModal 
+        key={selectedImage ? selectedImage.path : 'none'}
         selectedImage={selectedImage} 
         onClose={() => setSelectedImage(null)} 
       />
