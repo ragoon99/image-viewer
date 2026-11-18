@@ -53,3 +53,11 @@ export const matchesSearch = (img, filter) => {
   return (img?.path || '').toLowerCase().includes(needle) ||
          (img?.name || '').toLowerCase().includes(needle)
 }
+
+/**
+ * Decide whether the infinite-scroll sentinel should request another page.
+ * A failed request must not auto-retry: retrying in a tight loop makes the
+ * Sync and sentinel loaders flicker until the network request settles again.
+ */
+export const shouldLoadMore = ({ error, inView, hasMore, loading, imageCount }) =>
+  !error && inView && hasMore && !loading && imageCount > 0

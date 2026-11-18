@@ -7,6 +7,7 @@ import {
   mergeUniqueImages,
   parseColumnCount,
   readStoredRecentDirs,
+  shouldLoadMore,
 } from './gallery.js'
 
 const fakeStorage = (value) => ({
@@ -137,5 +138,40 @@ describe('matchesSearch', () => {
 
   test('rejects non-matching terms', () => {
     assert.equal(matchesSearch(img, 'sunset'), false)
+  })
+})
+
+describe('shouldLoadMore', () => {
+  const ready = {
+    error: null,
+    inView: true,
+    hasMore: true,
+    loading: false,
+    imageCount: 10,
+  }
+
+  test('allows loading when the sentinel is visible and no request is running', () => {
+    assert.equal(shouldLoadMore(ready), true)
+  })
+
+  test('blocks auto-retry while an error is displayed', () => {
+    // Regression: retrying a failed page in a loop made both loaders flicker.
+    assert.equal(shouldLoadMore({ ...ready, error: 'Connection failed' }), false)
+  })
+
+  test('blocks loading when the sentinel is out of view', () => {
+    assert.equal(shouldLoadMore({ ...ready, inView: false }), false)
+  })
+
+  test('blocks loading when there are no more pages', () => {
+    assert.equal(shouldLoadMore({ ...ready, hasMore: false }), false)
+  })
+
+  test('blocks loading while a request is in flight', () => {
+    assert.equal(shouldLoadMore({ ...ready, loading: true }), false)
+  })
+
+  test('blocks loading before the first page arrives', () => {
+    assert.equal(shouldLoadMore({ ...ready, imageCount: 0 }), false)
   })
 })

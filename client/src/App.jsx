@@ -10,6 +10,7 @@ import {
   mergeUniqueImages,
   parseColumnCount,
   readStoredRecentDirs,
+  shouldLoadMore,
 } from './lib/gallery'
 
 const API_BASE = 'http://localhost:3001'
@@ -150,13 +151,20 @@ function App() {
   }, [dir, filter, saveToRecent])
 
   useEffect(() => {
-    if (!inView || !hasMore || loading || images.length === 0) return
+    const ready = shouldLoadMore({
+      error,
+      inView,
+      hasMore,
+      loading,
+      imageCount: images.length,
+    })
+    if (!ready) return
     const timer = setTimeout(() => {
       fetchImages()
     }, 0)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inView, hasMore, loading, images.length])
+  }, [error, inView, hasMore, loading, images.length])
 
   useEffect(() => {
     const timer = setTimeout(() => {
