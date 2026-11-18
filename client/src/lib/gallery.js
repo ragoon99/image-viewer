@@ -9,3 +9,15 @@ export const mergeUniqueImages = (existing, incoming) => {
     return true
   })
 }
+
+export const getParentFolder = (filePath) => {
+  const parts = String(filePath || '').split('/')
+  return parts.slice(0, -1).join('/') || '/'
+}
+
+export const matchesSearch = (img, filter) => {
+  const needle = String(filter || '').toLowerCase()
+  if (!needle) return true
+  return (img?.path || '').toLowerCase().includes(needle) ||
+         (img?.name || '').toLowerCase().includes(needle)
+}

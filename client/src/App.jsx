@@ -4,7 +4,11 @@ import { Folder, Search, Loader2, Image as ImageIcon, X } from 'lucide-react'
 import { useInView } from 'react-intersection-observer'
 import ImageCard from './components/ImageCard'
 import ImageModal from './components/ImageModal'
-import { mergeUniqueImages } from './lib/gallery'
+import {
+  getParentFolder,
+  matchesSearch,
+  mergeUniqueImages,
+} from './lib/gallery'
 
 const API_BASE = 'http://localhost:3001'
 const PAGE_SIZE = 100
@@ -47,6 +51,8 @@ function App() {
   const loadingRef = useRef(false)
   const hasMoreRef = useRef(true)
   const requestIdRef = useRef(0)
+  const loadedDirRef = useRef(null)
+  const lastFilterRef = useRef('')
 
   useEffect(() => {
     localStorage.setItem('recentDirs', JSON.stringify(recentDirs))
@@ -59,11 +65,6 @@ function App() {
   }, [])
 
   const { ref, inView } = useInView()
-
-  const getParentFolder = (path) => {
-    const parts = path.split('/');
-    return parts.slice(0, -1).join('/') || '/';
-  }
 
   const saveToRecent = useCallback((newDir) => {
     setRecentDirs(prev => [newDir, ...prev.filter(d => d !== newDir)].slice(0, 5))
@@ -91,7 +92,7 @@ function App() {
 
     try {
       const res = await axios.get(`${API_BASE}/api/images`, {
-        params: { dir: activeDir, page: targetPage, limit: PAGE_SIZE },
+        params: { dir: activeDir, q: filter, page: targetPage, limit: PAGE_SIZE },
         signal: controller.signal
       })
       if (requestId !== requestIdRef.current) return
@@ -105,14 +106,19 @@ function App() {
       pageRef.current = targetPage + 1
 
       if (isNewDir) {
-        const folders = {}
-        if (res.data.folders) {
-          res.data.folders.forEach(f => {
-            folders[f] = true
-          })
+        // Only reset folder selections when the directory itself changes,
+        // so toggles survive a search.
+        if (loadedDirRef.current !== activeDir) {
+          const folders = {}
+          if (res.data.folders) {
+            res.data.folders.forEach(f => {
+              folders[f] = true
+            })
+          }
+          setSelectedFolders(folders)
+          loadedDirRef.current = activeDir
+          saveToRecent(activeDir)
         }
-        setSelectedFolders(folders)
-        saveToRecent(activeDir)
       }
     } catch (err) {
       if (axios.isCancel(err) || requestId !== requestIdRef.current) return
@@ -140,7 +146,7 @@ function App() {
         setLoading(false)
       }
     }
-  }, [dir, saveToRecent])
+  }, [dir, filter, saveToRecent])
 
   useEffect(() => {
     if (!inView || !hasMore || loading || images.length === 0) return
@@ -159,14 +165,24 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Re-query the server when the search term changes (debounced), so search
+  // covers every image on disk rather than only the already-loaded pages.
+  useEffect(() => {
+    if (lastFilterRef.current === filter) return
+    lastFilterRef.current = filter
+    const timer = setTimeout(() => {
+      fetchImages(true)
+    }, 300)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter])
+
   const uniqueFolders = useMemo(() => Object.keys(selectedFolders || {}).sort(), [selectedFolders])
 
   const filteredImages = useMemo(() => {
     return (images || []).filter(img => {
-      const matchesSearch = (img.path || '').toLowerCase().includes(filter.toLowerCase()) ||
-                           (img.name || '').toLowerCase().includes(filter.toLowerCase());
       const folderSelected = selectedFolders[getParentFolder(img.path)];
-      return matchesSearch && folderSelected;
+      return matchesSearch(img, filter) && folderSelected;
     })
   }, [images, filter, selectedFolders])
 
@@ -380,7 +396,7 @@ function App() {
             </div>
           )}
 
-          {!loading && filteredImages.length === 0 && (
+          {!loading && filteredImages.length === 0 && !hasMore && (
             <div className="text-center py-32 bg-white rounded-[40px] border border-gray-100 shadow-sm">
               <div className="mx-auto h-20 w-20 bg-gray-50 rounded-3xl flex items-center justify-center text-gray-200 mb-6">
                 <ImageIcon size={40} strokeWidth={1} />
