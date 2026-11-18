@@ -2,3 +2,15 @@
 
 /* Enable class-based dark mode so the in-app toggle can control it. */
 @custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * When the theme changes, suppress every component's transition for one
+ * frame. Otherwise each `transition-*` class animates at its own speed and
+ * the UI appears to recolor piece by piece.
+ */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}

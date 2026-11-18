@@ -83,12 +83,26 @@ function App() {
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
+    const root = document.documentElement
+
+    // Suppress transitions, apply the theme, then re-enable transitions on the
+    // next frame. This switches every color atomically instead of letting each
+    // component's transition-* class animate at a different speed.
+    root.classList.add('theme-switching')
+    void root.offsetWidth
+    root.classList.toggle('dark', next === 'dark')
+    root.style.colorScheme = next
+
     setTheme(next)
     try {
       localStorage.setItem(THEME_STORAGE_KEY, next)
     } catch {
       // Non-fatal, preference just won't persist.
     }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => root.classList.remove('theme-switching'))
+    })
   }
 
   const fetchImages = useCallback(async (isNewDir = false, overrideDir = null) => {
