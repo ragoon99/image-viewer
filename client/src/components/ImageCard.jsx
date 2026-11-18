@@ -12,7 +12,7 @@ const ImageCard = ({ img, onClick }) => {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       whileHover={{ y: -5 }}
-      className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 dark:bg-neutral-900 dark:border-neutral-800"
+      className="group bg-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-200 dark:bg-neutral-800 dark:border-neutral-700"
     >
       <div 
         className="aspect-square overflow-hidden image-checkerboard ring-1 ring-inset ring-black/5 relative cursor-pointer flex items-center justify-center dark:ring-white/10"
