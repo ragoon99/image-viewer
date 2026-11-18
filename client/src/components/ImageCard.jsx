@@ -12,18 +12,18 @@ const ImageCard = ({ img, onClick }) => {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       whileHover={{ y: -5 }}
-      className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100"
+      className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 dark:bg-neutral-900 dark:border-neutral-800"
     >
       <div 
-        className="aspect-square overflow-hidden bg-gray-100 relative cursor-pointer flex items-center justify-center"
+        className="aspect-square overflow-hidden bg-gray-100 relative cursor-pointer flex items-center justify-center dark:bg-neutral-800"
         onClick={() => !error && onClick(img)}
       >
         {!loaded && !error && (
-          <div className="absolute inset-0 animate-pulse bg-gray-200" />
+          <div className="absolute inset-0 animate-pulse bg-gray-200 dark:bg-neutral-700" />
         )}
         
         {error ? (
-          <div className="flex flex-col items-center gap-2 text-gray-400">
+          <div className="flex flex-col items-center gap-2 text-gray-400 dark:text-neutral-500">
             <ImageOff size={32} strokeWidth={1} />
             <span className="text-[10px] font-bold uppercase tracking-wider">Failed to load</span>
           </div>
@@ -46,10 +46,10 @@ const ImageCard = ({ img, onClick }) => {
         )}
       </div>
       <div className="p-3">
-        <p className="text-sm font-semibold truncate text-gray-800" title={img.name}>
+        <p className="text-sm font-semibold truncate text-gray-800 dark:text-neutral-100" title={img.name}>
           {img.name}
         </p>
-        <p className="text-[10px] text-gray-400 mt-1 truncate font-mono uppercase tracking-wider" title={img.path}>
+        <p className="text-[10px] text-gray-400 mt-1 truncate font-mono uppercase tracking-wider dark:text-neutral-500" title={img.path}>
           {img.path.split('/').slice(-3, -1).join(' / ') || 'Root'}
         </p>
       </div>
