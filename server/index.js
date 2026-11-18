@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import { pathToFileURL } from 'url';
 
 const app = express();
 app.use(cors());
@@ -133,4 +134,11 @@ app.get('/api/images', (req, res) => {
     }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const isMainModule = process.argv[1] &&
+    import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+
+if (isMainModule) {
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+export { app, getImages, isWithinRoot, isServableImage, allowedRoots, PORT, IMAGE_DIR };
