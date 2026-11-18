@@ -73,17 +73,28 @@ app.get('/api/images', (req, res) => {
         // Sort by modified time descending (newest first)
         allImages.sort((a, b) => b.mtime - a.mtime);
 
+        // Folders are always derived from the full scan so the sidebar stays stable while searching
         const folders = [...new Set(allImages.map(img => path.dirname(img.path)))].sort();
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 100;
+
+        // Server-side search across every image, not just the currently loaded page
+        const query = String(req.query.q || '').trim().toLowerCase();
+        const matches = query
+            ? allImages.filter(img =>
+                img.name.toLowerCase().includes(query) ||
+                img.path.toLowerCase().includes(query)
+              )
+            : allImages;
+
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit) || 100));
         const startIndex = (page - 1) * limit;
-        const endIndex = page * limit;
-        
+        const endIndex = startIndex + limit;
+
         res.json({
-            images: allImages.slice(startIndex, endIndex),
+            images: matches.slice(startIndex, endIndex),
             folders,
-            total: allImages.length,
-            hasMore: endIndex < allImages.length
+            total: matches.length,
+            hasMore: endIndex < matches.length
         });
     } catch (err) {
         console.error('API Error:', err);
