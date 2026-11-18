@@ -15,7 +15,7 @@ const ImageCard = ({ img, onClick }) => {
       className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 dark:bg-neutral-900 dark:border-neutral-800"
     >
       <div 
-        className="aspect-square overflow-hidden bg-gray-100 relative cursor-pointer flex items-center justify-center dark:bg-neutral-800"
+        className="aspect-square overflow-hidden image-checkerboard ring-1 ring-inset ring-black/5 relative cursor-pointer flex items-center justify-center dark:ring-white/10"
         onClick={() => !error && onClick(img)}
       >
         {!loaded && !error && (

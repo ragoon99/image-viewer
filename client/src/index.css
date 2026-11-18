@@ -4,6 +4,23 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
+ * Transparency checkerboard for thumbnails. Thumbnails use object-cover, so
+ * the pattern only shows through transparent pixels of cut-out artwork.
+ * One square is light and one is mid-tone, so both dark and light assets keep
+ * contrast against part of the pattern instead of blending into the card.
+ */
+.image-checkerboard {
+  background-color: #e4e4e7;
+  background-image: repeating-conic-gradient(#a1a1aa 0% 25%, transparent 0% 50%);
+  background-size: 16px 16px;
+}
+
+.dark .image-checkerboard {
+  background-color: #18181b;
+  background-image: repeating-conic-gradient(#a1a1aa 0% 25%, transparent 0% 50%);
+}
+
+/*
  * When the theme changes, suppress every component's transition for one
  * frame. Otherwise each `transition-*` class animates at its own speed and
  * the UI appears to recolor piece by piece.
