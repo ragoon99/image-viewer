@@ -4,6 +4,10 @@ import { Folder, Search, Loader2, Image as ImageIcon, X } from 'lucide-react'
 import { useInView } from 'react-intersection-observer'
 import ImageCard from './components/ImageCard'
 import ImageModal from './components/ImageModal'
+import { mergeUniqueImages } from './lib/gallery'
+
+const API_BASE = 'http://localhost:3001'
+const PAGE_SIZE = 100
 
 function App() {
   const [images, setImages] = useState([])
@@ -40,6 +44,9 @@ function App() {
 
   const abortControllerRef = useRef(null)
   const pageRef = useRef(1)
+  const loadingRef = useRef(false)
+  const hasMoreRef = useRef(true)
+  const requestIdRef = useRef(0)
 
   useEffect(() => {
     localStorage.setItem('recentDirs', JSON.stringify(recentDirs))
@@ -65,29 +72,38 @@ function App() {
   const fetchImages = useCallback(async (isNewDir = false, overrideDir = null) => {
     const activeDir = overrideDir || dir
     if (!activeDir) return
-    
+
+    // Avoid starting an overlapping pagination request
+    if (!isNewDir && (loadingRef.current || !hasMoreRef.current)) return
+
     // Abort previous request if still running
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
-    abortControllerRef.current = new AbortController()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    const requestId = ++requestIdRef.current
 
     const targetPage = isNewDir ? 1 : pageRef.current
-    const limit = isNewDir ? 100 : 50
+    loadingRef.current = true
     setLoading(true)
     setError(null)
 
     try {
-      const res = await axios.get(`http://localhost:3001/api/images`, {
-        params: { dir: activeDir, page: targetPage, limit },
-        signal: abortControllerRef.current.signal
+      const res = await axios.get(`${API_BASE}/api/images`, {
+        params: { dir: activeDir, page: targetPage, limit: PAGE_SIZE },
+        signal: controller.signal
       })
-      
+      if (requestId !== requestIdRef.current) return
+
       const resImages = res.data.images || []
-      setImages(prev => isNewDir ? resImages : [...prev, ...resImages])
-      setHasMore(res.data.hasMore || false)
+      setImages(prev => isNewDir ? resImages : mergeUniqueImages(prev, resImages))
+      const more = Boolean(res.data.hasMore)
+      hasMoreRef.current = more
+      setHasMore(more)
       setTotalImages(res.data.total || 0)
-      
+      pageRef.current = targetPage + 1
+
       if (isNewDir) {
         const folders = {}
         if (res.data.folders) {
@@ -97,12 +113,9 @@ function App() {
         }
         setSelectedFolders(folders)
         saveToRecent(activeDir)
-        pageRef.current = 2
-      } else {
-        pageRef.current = pageRef.current + 1
       }
     } catch (err) {
-      if (axios.isCancel(err)) return
+      if (axios.isCancel(err) || requestId !== requestIdRef.current) return
 
       const status = err.response?.status
       const message = err.response?.data?.error
@@ -118,21 +131,25 @@ function App() {
       if (isNewDir) {
         setImages([])
         setTotalImages(0)
+        hasMoreRef.current = false
+        setHasMore(false)
       }
     } finally {
-      setLoading(false)
+      if (requestId === requestIdRef.current) {
+        loadingRef.current = false
+        setLoading(false)
+      }
     }
   }, [dir, saveToRecent])
 
   useEffect(() => {
-    if (inView && hasMore && !loading && images.length > 0) {
-      const timer = setTimeout(() => {
-        fetchImages()
-      }, 0)
-      return () => clearTimeout(timer)
-    }
+    if (!inView || !hasMore || loading || images.length === 0) return
+    const timer = setTimeout(() => {
+      fetchImages()
+    }, 0)
+    return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inView])
+  }, [inView, hasMore, loading, images.length])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -347,9 +364,9 @@ function App() {
               gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` 
             }}
           >
-            {filteredImages.map((img, idx) => (
+            {filteredImages.map((img) => (
               <ImageCard 
-                key={`${img.path}-${idx}`} 
+                key={img.path} 
                 img={img} 
                 onClick={setSelectedImage} 
               />
