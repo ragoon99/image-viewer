@@ -8,6 +8,8 @@ import {
   getParentFolder,
   matchesSearch,
   mergeUniqueImages,
+  parseColumnCount,
+  readStoredRecentDirs,
 } from './lib/gallery'
 
 const API_BASE = 'http://localhost:3001'
@@ -20,19 +22,9 @@ function App() {
   const [filter, setFilter] = useState('')
   const [folderSearch, setFolderSearch] = useState('')
   
-  const [recentDirs, setRecentDirs] = useState(() => {
-    const saved = localStorage.getItem('recentDirs')
-    return saved ? JSON.parse(saved) : []
-  })
+  const [recentDirs, setRecentDirs] = useState(readStoredRecentDirs)
 
-  const [dirInput, setDirInput] = useState(() => {
-    const saved = localStorage.getItem('recentDirs')
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      if (parsed.length > 0) return parsed[0]
-    }
-    return './images'
-  })
+  const [dirInput, setDirInput] = useState(() => readStoredRecentDirs()[0] || './images')
 
   const [dir, setDir] = useState(dirInput)
 
@@ -42,8 +34,13 @@ function App() {
   const [selectedImage, setSelectedImage] = useState(null)
   
   const [columnCount, setColumnCount] = useState(() => {
-    const savedCols = localStorage.getItem('columnCount')
-    return savedCols ? parseInt(savedCols) : 6
+    let stored = null
+    try {
+      stored = localStorage.getItem('columnCount')
+    } catch {
+      // Storage may be unavailable; fall through to the default.
+    }
+    return parseColumnCount(stored)
   })
 
   const abortControllerRef = useRef(null)
@@ -55,7 +52,11 @@ function App() {
   const lastFilterRef = useRef('')
 
   useEffect(() => {
-    localStorage.setItem('recentDirs', JSON.stringify(recentDirs))
+    try {
+      localStorage.setItem('recentDirs', JSON.stringify(recentDirs))
+    } catch {
+      // Storage may be unavailable (private mode / quota); non-fatal.
+    }
   }, [recentDirs])
 
   useEffect(() => {
@@ -206,9 +207,13 @@ function App() {
               <input 
                 type="range" min="4" max="10" value={columnCount} 
                 onChange={(e) => {
-                  const val = parseInt(e.target.value);
+                  const val = parseInt(e.target.value, 10);
                   setColumnCount(val);
-                  localStorage.setItem('columnCount', val);
+                  try {
+                    localStorage.setItem('columnCount', String(val));
+                  } catch {
+                    // Non-fatal, preference just won't persist.
+                  }
                 }}
                 className="w-24 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
               />
