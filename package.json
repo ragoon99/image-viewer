@@ -1,6 +1,7 @@
 {
   "type": "module",
   "scripts": {
+    "start": "./start.sh",
     "test": "node --test server client/src/lib",
     "test:server": "node --test server",
     "test:client": "node --test client/src/lib"
