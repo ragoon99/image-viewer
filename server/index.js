@@ -3,6 +3,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
+import { dHashFromBuffer, getHash, hammingDistance, hashImages, similarityPercent } from './similarity.js';
 
 const app = express();
 app.use(cors());
@@ -131,6 +132,96 @@ app.get('/api/images', (req, res) => {
     } catch (err) {
         console.error('API Error:', err);
         res.status(500).json({ error: 'Internal server error during image scan' });
+    }
+});
+
+// Shared ranking for /api/similar and /api/similar/upload: closest Hamming
+// distance first, ties broken by path for a deterministic order.
+const rankSimilar = (targetHash, candidates, hashes, limit) => candidates
+    .filter(img => hashes.has(img.path))
+    .map(img => {
+        const distance = hammingDistance(targetHash, hashes.get(img.path));
+        return { ...img, distance, similarity: similarityPercent(distance) };
+    })
+    .sort((a, b) => a.distance - b.distance || a.path.localeCompare(b.path))
+    .slice(0, limit);
+
+app.get('/api/similar', async (req, res) => {
+    const filePath = req.query.path;
+    if (typeof filePath !== 'string' || !filePath) {
+        return res.status(400).json({ error: 'Invalid path' });
+    }
+
+    try {
+        const resolved = path.resolve(filePath);
+        if (!isServableImage(resolved) || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+
+        const root = [...allowedRoots].find(r => isWithinRoot(resolved, r));
+
+        let targetHash;
+        try {
+            targetHash = await getHash(resolved, fs.statSync(resolved));
+        } catch {
+            return res.status(422).json({ error: 'Could not decode image for comparison' });
+        }
+
+        const candidates = getImages(root);
+        const hashes = await hashImages(candidates);
+        hashes.delete(resolved);
+
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+        const similar = rankSimilar(targetHash, candidates, hashes, limit);
+
+        res.json({
+            query: { path: resolved, hash: targetHash },
+            total: similar.length,
+            similar,
+        });
+    } catch (err) {
+        console.error('Similar API Error:', err);
+        res.status(500).json({ error: 'Failed to compute similar images' });
+    }
+});
+
+// Find images similar to an uploaded one. The image arrives as the raw
+// request body (no multipart parsing needed), the search scope is ?dir=.
+app.post('/api/similar/upload', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
+    try {
+        if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+            return res.status(400).json({ error: 'No image data received' });
+        }
+
+        let dir = req.query.dir || IMAGE_DIR;
+        dir = path.resolve(dir);
+        if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+            return res.status(400).json({ error: 'Invalid directory' });
+        }
+
+        // Register the directory so the returned images can be served by /uploads.
+        allowedRoots.add(dir);
+
+        let targetHash;
+        try {
+            targetHash = await dHashFromBuffer(req.body);
+        } catch {
+            return res.status(422).json({ error: 'Could not decode uploaded image' });
+        }
+
+        const candidates = getImages(dir);
+        const hashes = await hashImages(candidates);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+        const similar = rankSimilar(targetHash, candidates, hashes, limit);
+
+        res.json({
+            query: { hash: targetHash },
+            total: similar.length,
+            similar,
+        });
+    } catch (err) {
+        console.error('Similar upload API Error:', err);
+        res.status(500).json({ error: 'Failed to compute similar images' });
     }
 });
 

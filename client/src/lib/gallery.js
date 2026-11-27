@@ -61,3 +61,14 @@ export const matchesSearch = (img, filter) => {
  */
 export const shouldLoadMore = ({ error, inView, hasMore, loading, imageCount }) =>
   !error && inView && hasMore && !loading && imageCount > 0
+
+/**
+ * Bucket a similarity percentage (0-100) into tiers for badge styling.
+ */
+export const similarityTier = (similarity) => {
+  const value = Number(similarity)
+  if (!Number.isFinite(value)) return 'low'
+  if (value >= 95) return 'exact'
+  if (value >= 75) return 'high'
+  return 'low'
+}

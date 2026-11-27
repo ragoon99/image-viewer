@@ -8,6 +8,7 @@ import {
   parseColumnCount,
   readStoredRecentDirs,
   shouldLoadMore,
+  similarityTier,
 } from './gallery.js'
 
 const fakeStorage = (value) => ({
@@ -173,5 +174,22 @@ describe('shouldLoadMore', () => {
 
   test('blocks loading before the first page arrives', () => {
     assert.equal(shouldLoadMore({ ...ready, imageCount: 0 }), false)
+  })
+})
+
+describe('similarityTier', () => {
+  test('buckets percentages into exact, high and low tiers', () => {
+    assert.equal(similarityTier(100), 'exact')
+    assert.equal(similarityTier(95), 'exact')
+    assert.equal(similarityTier(94), 'high')
+    assert.equal(similarityTier(75), 'high')
+    assert.equal(similarityTier(74), 'low')
+    assert.equal(similarityTier(0), 'low')
+  })
+
+  test('falls back to low for missing or malformed values', () => {
+    assert.equal(similarityTier(undefined), 'low')
+    assert.equal(similarityTier('not-a-number'), 'low')
+    assert.equal(similarityTier(NaN), 'low')
   })
 })

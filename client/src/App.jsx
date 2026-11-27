@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import axios from 'axios'
-import { Folder, Search, Loader2, Image as ImageIcon, X, Sun, Moon } from 'lucide-react'
+import { Folder, Search, Loader2, Image as ImageIcon, ImagePlus, X, Sun, Moon } from 'lucide-react'
 import { useInView } from 'react-intersection-observer'
 import ImageCard from './components/ImageCard'
 import ImageModal from './components/ImageModal'
@@ -34,6 +34,9 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [selectedImage, setSelectedImage] = useState(null)
+  const [similarUpload, setSimilarUpload] = useState(null)
+  const [uploadingSimilar, setUploadingSimilar] = useState(false)
+  const fileInputRef = useRef(null)
   
   const [columnCount, setColumnCount] = useState(() => {
     let stored = null
@@ -103,6 +106,29 @@ function App() {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => root.classList.remove('theme-switching'))
     })
+  }
+
+  const handleSimilarUpload = async (file) => {
+    if (!file) return
+    const previewUrl = URL.createObjectURL(file)
+    setSimilarUpload({ fileName: file.name, previewUrl, status: 'loading', items: [] })
+    setUploadingSimilar(true)
+    try {
+      const res = await axios.post(`${API_BASE}/api/similar/upload`, file, {
+        params: { dir },
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      })
+      setSimilarUpload(prev => prev ? { ...prev, status: 'done', items: res.data.similar || [] } : prev)
+    } catch {
+      setSimilarUpload(prev => prev ? { ...prev, status: 'error', items: [] } : prev)
+    } finally {
+      setUploadingSimilar(false)
+    }
+  }
+
+  const closeSimilarUpload = () => {
+    if (similarUpload?.previewUrl) URL.revokeObjectURL(similarUpload.previewUrl)
+    setSimilarUpload(null)
   }
 
   const fetchImages = useCallback(async (isNewDir = false, overrideDir = null) => {
@@ -327,6 +353,33 @@ function App() {
         {/* Sidebar */}
         <aside className="w-full lg:w-72 flex-shrink-0">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sticky top-28 dark:bg-neutral-900 dark:border-neutral-800">
+            {/* Find similar by upload */}
+            <div className="mb-6">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  handleSimilarUpload(file)
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingSimilar}
+                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 cursor-pointer dark:bg-blue-500 dark:shadow-blue-900/40"
+              >
+                {uploadingSimilar ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+                {uploadingSimilar ? 'Comparing...' : 'Find Similar Images'}
+              </button>
+              <p className="text-[10px] text-gray-400 mt-2 text-center dark:text-neutral-500">
+                Upload an image to find look-alikes
+              </p>
+            </div>
+
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2 dark:text-neutral-100">
                 <Folder size={16} className="text-blue-500 dark:text-blue-400" />
@@ -467,10 +520,74 @@ function App() {
         </div>
       </main>
 
-      <ImageModal 
+      {similarUpload && (
+        <div
+          className="fixed inset-0 z-40 bg-black/90 backdrop-blur-md p-4 md:p-8 overflow-y-auto"
+          onClick={closeSimilarUpload}
+        >
+          <div className="max-w-[1600px] mx-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-4 mb-8">
+              <div className="flex items-center gap-4 min-w-0">
+                <img
+                  src={similarUpload.previewUrl}
+                  alt={similarUpload.fileName}
+                  className="w-14 h-14 rounded-xl object-cover border border-white/10 bg-black/40 shrink-0"
+                />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">
+                    Similar to your upload
+                  </p>
+                  <p className="text-lg font-bold text-white truncate">{similarUpload.fileName}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeSimilarUpload}
+                aria-label="Close similar results"
+                className="bg-black/50 hover:bg-black/80 text-white p-2 rounded-full border border-white/10 transition-colors shrink-0 cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {similarUpload.status === 'loading' && (
+              <div className="flex flex-col items-center justify-center py-32 gap-3 text-neutral-400">
+                <Loader2 className="animate-spin text-blue-400 dark:text-blue-400" size={32} />
+                <p className="text-sm font-medium">Comparing against your gallery...</p>
+              </div>
+            )}
+
+            {similarUpload.status === 'error' && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl p-6 text-sm font-medium text-center">
+                Could not process that image. Try a JPG, PNG, GIF, WebP, BMP or SVG file.
+              </div>
+            )}
+
+            {similarUpload.status === 'done' && similarUpload.items.length === 0 && (
+              <div className="text-center py-32 text-neutral-400 text-sm">
+                No similar images found in the current directory.
+              </div>
+            )}
+
+            {similarUpload.status === 'done' && similarUpload.items.length > 0 && (
+              <div
+                className="grid gap-4 auto-rows-max"
+                style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+              >
+                {similarUpload.items.map(img => (
+                  <ImageCard key={img.path} img={img} onClick={setSelectedImage} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <ImageModal
         key={selectedImage ? selectedImage.path : 'none'}
-        selectedImage={selectedImage} 
-        onClose={() => setSelectedImage(null)} 
+        selectedImage={selectedImage}
+        onSelectImage={setSelectedImage}
+        onClose={() => setSelectedImage(null)}
       />
     </div>
   )

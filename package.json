@@ -5,5 +5,10 @@
     "test": "node --test server client/src/lib",
     "test:server": "node --test server",
     "test:client": "node --test client/src/lib"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.3.0",
+    "sharp": "^0.35.5"
   }
 }
