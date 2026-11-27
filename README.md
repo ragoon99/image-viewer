@@ -1,34 +1,56 @@
 # Image Viewer
 
----
-
-TLDR;
-A simple flat image viewer which search for images in your specified directory built with React and React Native.
+A simple image viewer that scans a directory and displays all images in a flat, filterable grid. Built with React and Express.
 
 ---
 
-Tired of browsing through your project directory to find the specific image you want to add... Well, got a good news for you! This web app is just the tool for you! It searches through your project directory and displays all the images in a flat view with ability to filter through the folders you want with dynamic image loading. You just need to pull to repo and run it with node (for server) and npm (for client)
+## Features
+
+- Flat grid view of every image in a directory (recursive scan, newest first)
+- Server-side search by file name or path
+- Filter images by folder
+- Adjustable grid density, dark/light theme, recent directories
+- Infinite scroll with paginated loading
+- Image details modal (dimensions, file size, type, last modified, copy path)
+- Find similar images using perceptual hashing (dHash):
+  - open any image to see its closest matches
+  - upload an image from the sidebar to find look-alikes
 
 ---
+
 ## Installation
 
 ```bash
 git clone https://github.com/ragoon99/image-viewer.git
 cd image-viewer
-cd client
-npm install
+npm install                  # server dependencies
+cd client && npm install && cd ..
 ```
 
 ---
+
 ## Usage
 
-client
+Start both server and client with one command:
 
 ```bash
-cd path/to/project/client && npm run dev
+npm start
 ```
 
-server
+- App: http://localhost:5173
+- API: http://localhost:3001
+
+On Windows, run `start.cmd` or `start.ps1` instead.
+
+To run them separately:
+
 ```bash
-cd path/to/project/server && node index.js
+node server/index.js         # server
+npm --prefix client run dev  # client
+```
+
+Point the app at any directory with `IMAGE_DIR` (default `./images`):
+
+```bash
+IMAGE_DIR=/path/to/pictures npm start
 ```
